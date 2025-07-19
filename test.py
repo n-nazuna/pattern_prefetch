@@ -1,6 +1,7 @@
 from bcc import BPF
 from bcc.utils import printb
 import ctypes
+from collections import defaultdict
 
 # eBPFプログラム
 bpf_text = """
@@ -14,24 +15,24 @@ struct data_t {
 };
 BPF_PERF_OUTPUT(events);
 
-TRACEPOINT_PROBE(block, block_rq_issue) {
+TRACEPOINT_PROBE(block, block_bio_queue) {
     struct data_t data = {};
     data.dev_high = args->dev >> 20;
     data.dev_low = args->dev & 0xFFFFF;
     data.sector = args->sector;
-    data.size = args->bytes;
+    data.size = args->nr_sector;
     __builtin_memcpy(&data.rwbs, args->rwbs, sizeof(data.rwbs));
     data.is_request = true;
 
     events.perf_submit(args, &data, sizeof(data));
     return 0;
 }
-TRACEPOINT_PROBE(block, block_rq_complete) {
+TRACEPOINT_PROBE(block, block_bio_complete) {
     struct data_t data = {};
     data.dev_high = args->dev >> 20;
     data.dev_low = args->dev & 0xFFFFF;
     data.sector = args->sector;
-    data.size = args->nr_sector * 512; // assuming sector size is 512 bytes
+    data.size = args->nr_sector;
     __builtin_memcpy(&data.rwbs, args->rwbs, sizeof(data.rwbs));
     data.is_request = false;
 
@@ -57,7 +58,7 @@ class Data(ctypes.Structure):
 # イベントを受信する関数
 def print_event(cpu, data, size):
     event = ctypes.cast(data, ctypes.POINTER(Data)).contents
-    print(f"Device: [{event.dev_high}:{event.dev_low}], Ops: {event.rwbs.decode('ascii')}, Sector: {hex(event.sector)}, Size (sectors): {event.size}, Type: {event.is_request and 'REQUEST' or 'COMPLETE'}")
+    print(f"dev: [{event.dev_high:<3}:{event.dev_low:<3}], ops: {event.rwbs.decode('ascii'):<8}, lba: {event.sector:<16X}, blk: {event.size:<8}, rq: {event.is_request and 'RQ' or 'CQ'}")
 
 # perf bufferの設定と開始
 b["events"].open_perf_buffer(print_event)
