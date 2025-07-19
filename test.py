@@ -10,6 +10,7 @@ struct data_t {
     u64 sector;
     u32 size;
     char rwbs[8];
+    bool is_request;
 };
 BPF_PERF_OUTPUT(events);
 
@@ -20,6 +21,19 @@ TRACEPOINT_PROBE(block, block_rq_issue) {
     data.sector = args->sector;
     data.size = args->bytes;
     __builtin_memcpy(&data.rwbs, args->rwbs, sizeof(data.rwbs));
+    data.is_request = true;
+
+    events.perf_submit(args, &data, sizeof(data));
+    return 0;
+}
+TRACEPOINT_PROBE(block, block_rq_complete) {
+    struct data_t data = {};
+    data.dev_high = args->dev >> 20;
+    data.dev_low = args->dev & 0xFFFFF;
+    data.sector = args->sector;
+    data.size = args->nr_sector * 512; // assuming sector size is 512 bytes
+    __builtin_memcpy(&data.rwbs, args->rwbs, sizeof(data.rwbs));
+    data.is_request = false;
 
     events.perf_submit(args, &data, sizeof(data));
     return 0;
@@ -36,13 +50,14 @@ class Data(ctypes.Structure):
         ("dev_high", ctypes.c_uint),
         ("sector", ctypes.c_ulonglong),
         ("size", ctypes.c_uint),
-        ("rwbs", ctypes.c_char * 8)
+        ("rwbs", ctypes.c_char * 8),
+        ("is_request", ctypes.c_bool),
     ]
 
 # イベントを受信する関数
 def print_event(cpu, data, size):
     event = ctypes.cast(data, ctypes.POINTER(Data)).contents
-    print(f"Device {event.dev_high}:{event.dev_low}, Ops: {event.rwbs.decode('ascii')} Sector: {event.sector}, Size (sectors): {event.size}")
+    print(f"Device: [{event.dev_high}:{event.dev_low}], Ops: {event.rwbs.decode('ascii')}, Sector: {hex(event.sector)}, Size (sectors): {event.size}, Type: {event.is_request and 'REQUEST' or 'COMPLETE'}")
 
 # perf bufferの設定と開始
 b["events"].open_perf_buffer(print_event)
