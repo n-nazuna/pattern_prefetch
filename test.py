@@ -9,6 +9,7 @@ struct data_t {
     u32 dev_high;
     u64 sector;
     u32 size;
+    char rwbs[8];
 };
 BPF_PERF_OUTPUT(events);
 
@@ -18,6 +19,8 @@ TRACEPOINT_PROBE(block, block_rq_issue) {
     data.dev_low = args->dev & 0xFFFFF;
     data.sector = args->sector;
     data.size = args->bytes;
+    __builtin_memcpy(&data.rwbs, args->rwbs, sizeof(data.rwbs));
+
     events.perf_submit(args, &data, sizeof(data));
     return 0;
 }
@@ -33,12 +36,13 @@ class Data(ctypes.Structure):
         ("dev_high", ctypes.c_uint),
         ("sector", ctypes.c_ulonglong),
         ("size", ctypes.c_uint),
+        ("rwbs", ctypes.c_char * 8)
     ]
 
 # イベントを受信する関数
 def print_event(cpu, data, size):
     event = ctypes.cast(data, ctypes.POINTER(Data)).contents
-    print(f"Device {event.dev_high}:{event.dev_low}, Sector: {event.sector}, Size (sectors): {event.size}")
+    print(f"Device {event.dev_high}:{event.dev_low}, Ops: {event.rwbs.decode('ascii')} Sector: {event.sector}, Size (sectors): {event.size}")
 
 # perf bufferの設定と開始
 b["events"].open_perf_buffer(print_event)
