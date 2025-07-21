@@ -19,7 +19,7 @@ BPF_PERF_OUTPUT(events);
 
 TRACEPOINT_PROBE(block, block_bio_queue) {
     struct data_t data = {};
-    if (args->rwbs[0] == 'R'
+    if (args->rwbs[0] == 'R' // ebpfではstring.hが使えないので力業でフィルタする
      || args->rwbs[1] == 'R'
      || args->rwbs[2] == 'R'
      || args->rwbs[3] == 'R'
@@ -30,7 +30,7 @@ TRACEPOINT_PROBE(block, block_bio_queue) {
         data.dev_high = args->dev >> 20;
         data.dev_low = args->dev & 0xFFFFF;
         data.sector_begin = args->sector;
-        data.sector_end = args->sector + args->nr_sector - 1;
+        data.sector_end = args->sector + args->nr_sector - 1; // sector_beginのlbaにもデータが書き込まれるので、block size(nr_sector)から1引く
 
         events.perf_submit(args, &data, sizeof(data));
     }
