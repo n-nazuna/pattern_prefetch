@@ -73,9 +73,6 @@ if __name__ == "__main__":
     
     # データを収集する
     df = bpf.poll(1000)  # 1000サンプルを収集
-
-    # ヘッダーの表示
-    print("dev_high, dev_low, sector_begin, sector_end")
     print(df)
 
     # CSV出力（オプション）
