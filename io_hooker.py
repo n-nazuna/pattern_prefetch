@@ -1,7 +1,9 @@
+import os
+import threading
 from bcc import BPF
 import ctypes
-import pandas as pd
 from collections import deque
+import pandas as pd
 
 
 # ユーザ空間データ構造体
@@ -13,9 +15,34 @@ class Data(ctypes.Structure):
         ("sector_end", ctypes.c_ulonglong),
     ]
 
+class cache_wamer:
+    def __init__(self):
+        self.SECTOR_SIZE = 512
+        self.BLOCK_SIZE = 4096
+    def read_executor(self, fd, offset):
+        try:
+            data = os.pread(fd, self.BLOCK_SIZE, offset)
+            print(f"Read {len(data)} bytes at offset {offset}")
+        except OSError as e:
+            print(f"Failed offset:{offset}, fd:{fd}, error:{e}")
+
+    def run_read_batch(self, path, lba_list):
+        fd = os.open(path, os.O_RDWR)
+        threads = []
+
+        for lba in lba_list:
+            offset = lba * self.SECTOR_SIZE
+            t = threading.Thread(target=self.read_executor, args=(fd, offset))
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        os.close(fd)
+
 class bpf_probe:
     def __init__(self):
-        # eBPFプログラム（略）
         bpf_text = """
         struct data_t {
             u32 dev_low;
@@ -47,7 +74,7 @@ class bpf_probe:
         """
         self.bpf = BPF(text=bpf_text)
         # 最大保持数
-        MAX_ENTRIES = 20_000
+        MAX_ENTRIES = 100_000
         self.data_deque = deque(maxlen=MAX_ENTRIES) # failsafe
 
     def probe(self, cpu, data, size):
