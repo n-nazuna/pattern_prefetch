@@ -67,6 +67,19 @@ class bpf_probe:
             print("Manual Exit")
         return pd.DataFrame(self.data_deque)
 
+class io_analyzer:
+    def __init__(self):
+        pass
+    def marge_zoned_io(self, df):
+        pass
+    def marge_sequential_native_io(self, df):
+        pass
+    def native_io_to_zoned_io(self, df):
+        pass
+    def extract_pattern_zoned_io(self, df):
+        pass
+
+
 if __name__ == "__main__":
     # BPFプログラムの初期化
     bpf = bpf_probe()
